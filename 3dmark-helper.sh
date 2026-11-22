@@ -135,8 +135,8 @@ launch_options() {
     env+=(DRI_PRIME=1)
   fi
   [[ $app == "$APP_3DMARK" ]] && env+=("VKD3D_CONFIG=dxr,dxr11")
-  [[ ${OSMESA:-0} == 1 ]] && { echo "${env[*]} %command% --use-gl=osmesa"; return; }
-  echo "${env[*]} %command%"
+  [[ ${OSMESA:-0} == 1 ]] && { local p="${env[*]}"; echo "${p:+$p }%command% --use-gl=osmesa"; return; }
+  local pre="${env[*]}"; echo "${pre:+$pre }%command%"
 }
 
 # ---------- commands ----------
@@ -173,7 +173,7 @@ cmd_doctor() {
     local tool; tool=$($VDF get "$STEAM_ROOT/config/config.vdf" "InstallConfigStore/Software/Valve/Steam/CompatToolMapping/$id/name" 2>/dev/null || true)
     [[ -n $tool ]] && ok "$name compat tool: $tool" || warn "$name: no forced Proton version (run setup)"
     [[ $tool == proton_11* ]] && bad "$name forced to Proton 11 — DX12 tests break there"
-    local lo; lo=$(for f in $(user_configs); do $VDF get "$f" "UserLocalConfigStore/Software/Valve/Steam/apps/$id/LaunchOptions" 2>/dev/null; done | head -1)
+    local lo; lo=$(for f in $(user_configs); do $VDF get "$f" "UserLocalConfigStore/Software/Valve/Steam/apps/$id/LaunchOptions" 2>/dev/null || true; done | head -1)
     [[ -n $lo ]] && ok "$name launch options: $lo" || warn "$name: no launch options set"
     app_prefix "$id" >/dev/null && ok "$name Proton prefix exists" || warn "$name: no prefix yet (launch once)"
   done
@@ -308,6 +308,15 @@ cmd_install_apps() {
     want+=("$id")
   done
   ((${#want[@]})) || return 0
+  # Install Proton 10 first so the apps can be mapped to it (not Experimental).
+  if [[ " ${want[*]} " == *" $APP_PROTON10 "* ]]; then
+    stop_steam; write_stub_manifest "$APP_PROTON10"
+    (steam_cmd -silent &>/tmp/3dmark-helper-steam.log &)
+    wait_installed "$APP_PROTON10" "Proton 10"
+    local rest=() x; for x in "${want[@]}"; do [[ $x != "$APP_PROTON10" ]] && rest+=("$x"); done
+    want=("${rest[@]}")
+    ((${#want[@]})) || return 0
+  fi
   stop_steam
   for id in "${want[@]}"; do
     # Windows-only apps need a Proton mapping BEFORE download or Steam fetches 0 depots.

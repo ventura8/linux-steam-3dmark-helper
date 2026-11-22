@@ -3,6 +3,10 @@
 Format: [Keep a Changelog](https://keepachangelog.com/), versions: [SemVer](https://semver.org/).
 
 ## [Unreleased]
+### Fixed
+- `doctor` aborted when an app had no launch options yet.
+- Proton 10 is installed before the apps, so they get mapped to it rather than to Experimental.
+- No leading space in launch options.
 
 ## [0.1.1] - 2026-11-22
 ### Fixed

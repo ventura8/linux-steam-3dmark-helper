@@ -46,7 +46,7 @@ setup() {
   source "$ROOT/3dmark-helper.sh"
   detect_gpus() { GPU_VENDORS="1002"; }
   run launch_options 205270
-  [ "$output" = " %command%" ] || [ "$output" = "%command%" ]
+  [ "$output" = "%command%" ]
 }
 
 @test "proton 11 is never auto-picked" {
