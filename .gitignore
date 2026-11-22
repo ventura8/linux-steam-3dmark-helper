@@ -221,3 +221,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+*.3dmark-helper.bak
+3dmark-helper-logs-*.tar.gz
+!/lib/
