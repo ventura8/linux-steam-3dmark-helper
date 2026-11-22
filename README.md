@@ -1,6 +1,6 @@
 # linux-steam-3dmark-helper
 
-One script that takes a fresh Ubuntu / Xubuntu (26.10 tested) machine to a working **Steam 3DMark** (app 223850) and **3DMark 11** (app 205270) under Proton — on Intel, AMD and NVIDIA (including hybrid laptops).
+One script that takes a fresh Ubuntu / Xubuntu / Kubuntu / Lubuntu (26.10; GNOME, XFCE, KDE Plasma, LXQt) machine to a working **Steam 3DMark** (app 223850) and **3DMark 11** (app 205270) under Proton — on Intel, AMD and NVIDIA (including hybrid laptops).
 
 > ### 🙏 Tribute to 3DMark and UL
 > **3DMark** is the world's most popular GPU benchmark, created by **Futuremark** (Finland, founded 1997) and developed today by **[UL Solutions — UL Benchmarks](https://benchmarks.ul.com/)**. For more than 25 years — from 3DMark99 through 3DMark 11, Fire Strike, Time Spy, Port Royal, Speed Way and Steel Nomad — their work has been the common yardstick that gamers, overclockers, reviewers and hardware makers use to compare graphics performance. This project exists because we love their software and want to run it on Linux too; UL has said a native Linux version is planned, and we look forward to it.
@@ -84,6 +84,8 @@ Per-machine results (filled as we test):
 | NUC | Intel Arc 140T | Xubuntu 26.10 | in progress |
 | Desktop | NVIDIA | Xubuntu 26.10 | pending |
 | Desktop | AMD | Xubuntu 26.10 | pending |
+| any | any | Kubuntu 26.10 (KDE Plasma) | pending |
+| any | any | Lubuntu 26.10 (LXQt) | pending |
 
 Report yours: run `./3dmark-helper.sh logs` and open an issue.
 
@@ -91,7 +93,14 @@ Report yours: run `./3dmark-helper.sh logs` and open an issue.
 Everything is automatic except what only you can do: your **sudo password**, **Steam login**, accepting the **3DMark EULA**, and installing the individual tests from 3DMark's **Benchmarks** tab (Time Spy, Fire Strike, … are fetched in-app).
 
 ## Troubleshooting
-- **No title-bar buttons** → 3DMark draws its own borderless window (same on Windows). Use Super+H (minimise), Super+↑/↓ (maximise/restore), Alt+F4 (close).
+- **No title-bar buttons** → 3DMark draws its own borderless window (same on Windows). Use the keyboard or the taskbar entry:
+
+  | Desktop | Minimise | Maximise | Close | Move |
+  |---|---|---|---|---|
+  | GNOME (Ubuntu) | Super+H | Super+↑ | Alt+F4 | Super+drag |
+  | XFCE (Xubuntu) | click taskbar entry | Alt+F10 | Alt+F4 | Alt+drag |
+  | KDE Plasma (Kubuntu) | Meta+PgDn | Meta+PgUp | Alt+F4 | Meta+drag |
+  | LXQt (Lubuntu, Openbox) | click taskbar entry / Alt+Space menu | Alt+Space → Maximize | Alt+F4 | Alt+drag |
 - **"System information not available"** → Futuremark SystemInfo can't read hardware under Proton; benchmarks still run.
 - **Apt "Unable to satisfy dependencies … :i386 Breaks"** → handled automatically by `deps` (aligns amd64/i386 versions of the same source package).
 - **Launcher never opens, no log** → 32-bit Vulkan missing: `./3dmark-helper.sh deps`.

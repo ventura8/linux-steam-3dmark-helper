@@ -360,7 +360,8 @@ cmd_key() {
 clipboard() {
   if [[ -n ${WAYLAND_DISPLAY:-} ]] && command -v wl-paste &>/dev/null; then wl-paste -n 2>/dev/null
   elif command -v xclip &>/dev/null; then xclip -o -selection clipboard 2>/dev/null
-  elif command -v xsel &>/dev/null; then xsel -ob 2>/dev/null; fi
+  elif command -v xsel &>/dev/null; then xsel -ob 2>/dev/null
+  elif command -v qdbus &>/dev/null; then qdbus org.kde.klipper /klipper getClipboardContents 2>/dev/null; fi
 }
 # A real key looks like 3DM-ICF-XXXXX-XXXXX-XXXXX-XXXXX (older: 4-char groups).
 wait_clipboard_key() {
@@ -410,6 +411,9 @@ EOD
   done
   update-desktop-database "$appsdir" &>/dev/null || true
   gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" &>/dev/null || true
+  # KDE Plasma caches menus in ksycoca; GNOME/XFCE/LXQt watch the XDG dirs directly.
+  local k; for k in kbuildsycoca6 kbuildsycoca5; do command -v "$k" &>/dev/null && { "$k" &>/dev/null || true; break; }; done
+  xdg-desktop-menu forceupdate &>/dev/null || true
 }
 
 cmd_logs() {
