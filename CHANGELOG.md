@@ -5,6 +5,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/), versions: [SemVer](http
 ## [Unreleased]
 ### Added
 - KDE Plasma (Kubuntu) and LXQt (Lubuntu) support: menu cache refresh, Klipper clipboard, per-desktop window shortcuts.
+- Launch Steam with the desktop session environment when run over SSH/TTY (fixes Steam with no window).
 - ARCHITECTURE.md (Mermaid diagrams), CONTRIBUTING.md, SECURITY.md, CHANGELOG.md.
 
 ## [0.1.0] - 2026-11-22
