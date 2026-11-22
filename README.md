@@ -101,6 +101,8 @@ Everything is automatic except what only you can do: your **sudo password**, **S
   | XFCE (Xubuntu) | click taskbar entry | Alt+F10 | Alt+F4 | Alt+drag |
   | KDE Plasma (Kubuntu) | Meta+PgDn | Meta+PgUp | Alt+F4 | Meta+drag |
   | LXQt (Lubuntu, Openbox) | click taskbar entry / Alt+Space menu | Alt+Space → Maximize | Alt+F4 | Alt+drag |
+- **Steam starts but no window appears (headless / VNC box)** → X has no connected monitor, so Steam's UI can't create windows ("Failed to create popup" in `logs/webhelper_js.txt`). `./3dmark-helper.sh headless` forces the HDMI connector on (sudo). Permanent: HDMI dummy plug or kernel arg `video=HDMI-A-1:1920x1080@60e`.
+- **Steam started over SSH shows no window** → the helper borrows your desktop session's environment automatically; start it via the helper or from the desktop.
 - **"System information not available"** → Futuremark SystemInfo can't read hardware under Proton; benchmarks still run.
 - **Apt "Unable to satisfy dependencies … :i386 Breaks"** → handled automatically by `deps` (aligns amd64/i386 versions of the same source package).
 - **Launcher never opens, no log** → 32-bit Vulkan missing: `./3dmark-helper.sh deps`.
