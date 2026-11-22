@@ -12,6 +12,7 @@ APP_3DMARK=223850
 APP_3DMARK11=205270
 APP_PROTON10=3658110        # "Proton 10.0" tool app
 APP_PROTON_EXP=1493710      # "Proton - Experimental"
+APP_SLR3=1628350            # Steam Linux Runtime 3.0 (sniper), required by Proton 10
 
 # ---------- output helpers ----------
 if [[ -t 1 ]]; then C_G=$'\e[32m'; C_R=$'\e[31m'; C_Y=$'\e[33m'; C_B=$'\e[1m'; C_0=$'\e[0m'; else C_G=; C_R=; C_Y=; C_B=; C_0=; fi
@@ -161,7 +162,7 @@ cmd_doctor() {
   info "Steam"
   if detect_steam; then ok "Steam ($STEAM_KIND) at $STEAM_ROOT"; else bad "Steam not installed / never started"; return 1; fi
   logged_in && ok "a Steam account is logged in" || bad "no Steam login yet"
-  for t in $APP_PROTON10:"Proton 10" $APP_PROTON_EXP:"Proton Experimental"; do
+  for t in $APP_SLR3:"Steam Linux Runtime 3.0 (sniper)" $APP_PROTON10:"Proton 10" $APP_PROTON_EXP:"Proton Experimental"; do
     app_installed "${t%%:*}" && ok "${t#*:} installed" || warn "${t#*:} not installed"
   done
   ok "Proton tool that will be used: $(proton_tool)"
@@ -271,7 +272,7 @@ wait_installed() {
 }
 
 install_dir_of() {
-  case $1 in "$APP_3DMARK") echo 3DMark ;; "$APP_3DMARK11") echo "3DMark 11" ;; "$APP_PROTON10") echo "Proton 10.0" ;; esac
+  case $1 in "$APP_3DMARK") echo 3DMark ;; "$APP_3DMARK11") echo "3DMark 11" ;; "$APP_PROTON10") echo "Proton 10.0" ;; "$APP_SLR3") echo "SteamLinuxRuntime_sniper" ;; esac
 }
 
 # Queue a download without any Steam dialog: Steam picks up an appmanifest with
@@ -302,18 +303,21 @@ cmd_install_apps() {
   detect_steam || die "Steam not found"
   logged_in || cmd_login
   local id want=()
-  for id in $APP_PROTON10 $APP_3DMARK $APP_3DMARK11; do
+  for id in $APP_SLR3 $APP_PROTON10 $APP_3DMARK $APP_3DMARK11; do
     [[ $id == "$APP_3DMARK11" && ${SKIP_3DMARK11:-0} == 1 ]] && continue
     app_installed "$id" && { ok "$(install_dir_of "$id") already installed"; continue; }
     want+=("$id")
   done
   ((${#want[@]})) || return 0
   # Install Proton 10 first so the apps can be mapped to it (not Experimental).
-  if [[ " ${want[*]} " == *" $APP_PROTON10 "* ]]; then
-    stop_steam; write_stub_manifest "$APP_PROTON10"
+  local tools=() x
+  for x in "${want[@]}"; do [[ $x == "$APP_PROTON10" || $x == "$APP_SLR3" ]] && tools+=("$x"); done
+  if ((${#tools[@]})); then
+    stop_steam
+    for x in "${tools[@]}"; do write_stub_manifest "$x"; done
     (steam_cmd -silent &>/tmp/3dmark-helper-steam.log &)
-    wait_installed "$APP_PROTON10" "Proton 10"
-    local rest=() x; for x in "${want[@]}"; do [[ $x != "$APP_PROTON10" ]] && rest+=("$x"); done
+    for x in "${tools[@]}"; do wait_installed "$x" "$(install_dir_of "$x")"; done
+    local rest=(); for x in "${want[@]}"; do [[ $x != "$APP_PROTON10" && $x != "$APP_SLR3" ]] && rest+=("$x"); done
     want=("${rest[@]}")
     ((${#want[@]})) || return 0
   fi

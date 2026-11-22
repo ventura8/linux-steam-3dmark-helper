@@ -4,6 +4,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/), versions: [SemVer](http
 
 ## [Unreleased]
 ### Fixed
+- Install Steam Linux Runtime 3.0 (sniper) with Proton 10; without it protontricks fails on fresh systems.
 - `doctor` aborted when an app had no launch options yet.
 - Proton 10 is installed before the apps, so they get mapped to it rather than to Experimental.
 - No leading space in launch options.
