@@ -49,7 +49,26 @@ detect_steam() {
   return 1
 }
 
+# When run over SSH/TTY, borrow the logged-in desktop session's environment;
+# without D-Bus/XDG/Xauthority Steam starts but never shows its window.
+import_session_env() {
+  [[ -n ${DBUS_SESSION_BUS_ADDRESS:-} && -n ${DISPLAY:-}${WAYLAND_DISPLAY:-} ]] && return 0
+  local p pid
+  for p in gnome-shell plasmashell xfce4-panel lxqt-panel xfce4-session lxqt-session ksmserver; do
+    pid=$(pgrep -u "$(id -u)" -x "$p" | head -1) && [[ -n $pid ]] && break
+  done
+  [[ -n ${pid:-} && -r /proc/$pid/environ ]] || return 1
+  local line
+  while IFS= read -r -d '' line; do
+    case $line in
+      DISPLAY=*|WAYLAND_DISPLAY=*|XAUTHORITY=*|DBUS_SESSION_BUS_ADDRESS=*|XDG_RUNTIME_DIR=*|XDG_CURRENT_DESKTOP=*|XDG_SESSION_TYPE=*)
+        export "${line?}" ;;
+    esac
+  done < "/proc/$pid/environ"
+}
+
 steam_cmd() {
+  import_session_env || true
   case $STEAM_KIND in
     snap) snap run steam "$@" ;;
     flatpak) flatpak run com.valvesoftware.Steam "$@" ;;
@@ -215,6 +234,7 @@ cmd_login() {
   detect_steam || true
   if logged_in && steam_running; then ok "Steam is running and logged in"; return 0; fi
   info "Starting Steam — log in with your account in the Steam window (first start downloads ~400 MB)"
+  import_session_env || true
   [[ -z ${DISPLAY:-}${WAYLAND_DISPLAY:-} ]] && die "No graphical session (DISPLAY/WAYLAND_DISPLAY unset). Run this from the desktop."
   (steam_cmd &>/tmp/3dmark-helper-steam.log &)
   for _ in $(seq 1800); do

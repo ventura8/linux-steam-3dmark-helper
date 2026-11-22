@@ -125,6 +125,9 @@ Everything is automatic except what only you can do: your **sudo password**, **S
 
 No umu-protonfixes / GE protonfixes entry exists for 223850 or 205270, and the AUR has no package. This project is the only one covering the full path from a bare system to a running 3DMark and 3DMark 11.
 
+## Docs
+[Architecture](ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md)
+
 ## Development
 ```bash
 bats tests/ && shellcheck 3dmark-helper.sh
