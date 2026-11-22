@@ -4,7 +4,7 @@
 # https://github.com/ventura8/linux-steam-3dmark-helper
 set -euo pipefail
 
-VERSION=0.1.0
+VERSION=0.1.1
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 VDF="python3 $HERE/lib/vdfedit.py"
 
@@ -230,9 +230,27 @@ cmd_install_steam() {
   STEAM_KIND=deb; STEAM_ROOT="$HOME/.local/share/Steam"
 }
 
+# Headless boxes (VNC, no monitor): Steam's UI refuses to create windows when X has
+# no connected output ("Failed to create popup"). Force the first HDMI/DP connector on.
+cmd_headless() {
+  import_session_env || true
+  [[ ${XDG_SESSION_TYPE:-x11} == x11 && -n ${DISPLAY:-} ]] || return 0
+  command -v xrandr &>/dev/null || return 0
+  if xrandr 2>/dev/null | grep -q ' connected'; then return 0; fi
+  local c; c=$(ls -d /sys/class/drm/card*-HDMI-A-1 /sys/class/drm/card*-DP-1 2>/dev/null | head -1)
+  [[ -n $c ]] || { warn "headless and no HDMI/DP connector found — plug in a monitor or HDMI dummy plug"; return 0; }
+  warn "No monitor connected (headless/VNC). Forcing ${c##*/} on so Steam can open windows (sudo)."
+  echo on | sudo tee "$c/status" >/dev/null || return 1
+  sleep 2
+  local out; out=$(xrandr | awk '/ connected/{print $1; exit}')
+  [[ -n $out ]] && xrandr --output "$out" --auto
+  ok "virtual display active on $out (lost on reboot; for permanent: HDMI dummy plug or kernel arg video=${c##*card?-}:1920x1080@60e)"
+}
+
 cmd_login() {
   detect_steam || true
   if logged_in && steam_running; then ok "Steam is running and logged in"; return 0; fi
+  cmd_headless || true
   info "Starting Steam — log in with your account in the Steam window (first start downloads ~400 MB)"
   import_session_env || true
   [[ -z ${DISPLAY:-}${WAYLAND_DISPLAY:-} ]] && die "No graphical session (DISPLAY/WAYLAND_DISPLAY unset). Run this from the desktop."
@@ -480,6 +498,7 @@ Usage: $0 [--ask] <command> [args]   (default: fully automatic)
   prefix <app>            create Proton prefix + d3dcompiler_43/47
   key <app> [KEY]         write CD key so the app is not in demo mode
   launch-options <app>    print recommended launch options for this machine
+  headless                force a display output on monitor-less (VNC) machines so Steam can show windows
   shortcuts               add 3DMark / 3DMark 11 to the app menu with proper icons
   logs                    bundle diagnostics into ~/3dmark-helper-logs-*.tar.gz
 Env: PROTON_TOOL=proton_experimental  OSMESA=1 (blank launcher fix)  SKIP_3DMARK11=1  ASSUME_YES=1
@@ -503,6 +522,7 @@ main() {
     launch-options) detect_steam || true; launch_options "$(app_id "${1:-3dmark}")" ;;
     logs) cmd_logs ;;
     shortcuts) cmd_shortcuts ;;
+    headless) cmd_headless ;;
     -V|--version|version) echo "linux-steam-3dmark-helper $VERSION" ;;
     -h|--help|help) usage ;;
     *) usage; exit 2 ;;
