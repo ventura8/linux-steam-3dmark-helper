@@ -74,6 +74,7 @@ flowchart TD
     ocr --> w["winereg.py writes KeyCode (value via env, never in ps)"]
     one --> w --> done
 ```
+
 Key locations come from Steam's appinfo `legacykeyregistrylocation`: `Futuremark\3DMark` (+`UL\3DMark`), `Futuremark\3DMark11`; PCMark 10 has none (Steam ownership).
 
 ## UL SystemInfo fix
@@ -97,6 +98,7 @@ sequenceDiagram
 ```
 
 ## Desktop handling
+
 All integration is XDG/X11-generic: `.desktop` + hicolor icon (`StartupWMClass=steam_app_<id>`), cache refresh (`update-desktop-database`, `gtk-update-icon-cache`, `kbuildsycoca6/5`, `xdg-desktop-menu`), window capture with `xwd` on Steam's own window (works under XWayland too). Only input differs: X11 sessions (XFCE, LXQt, KDE on X11) accept synthetic clicks, so CD keys are fully automatic; Wayland compositors (GNOME, KDE Wayland) block them, so the user clicks once.
 
 ## Key decisions

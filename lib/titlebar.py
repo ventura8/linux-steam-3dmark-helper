@@ -8,6 +8,7 @@ usage: titlebar.py kde     KWINRULESRC   # KDE Plasma (KWin, X11 + Wayland)
 Idempotent; prints "changed" or "unchanged". GNOME/Mutter has no equivalent and XFCE
 (xfwm4) already decorates these windows.
 """
+
 import configparser
 import os
 import sys
@@ -32,9 +33,13 @@ def kde(path):
     cp.set("General", "rules", ",".join(rules))
     cp.set("General", "count", str(len(rules)))
     cp.add_section(RULE_ID)
-    for k, v in (("Description", "3DMark / PCMark: show title bar (linux-steam-3dmark-helper)"),
-                 ("wmclass", CLASS_RE), ("wmclassmatch", "3"),       # 3 = regex
-                 ("noborder", "false"), ("noborderrule", "2")):       # 2 = force
+    for k, v in (
+        ("Description", "3DMark / PCMark: show title bar (linux-steam-3dmark-helper)"),
+        ("wmclass", CLASS_RE),
+        ("wmclassmatch", "3"),  # 3 = regex
+        ("noborder", "false"),
+        ("noborderrule", "2"),
+    ):  # 2 = force
         cp.set(RULE_ID, k, v)
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:

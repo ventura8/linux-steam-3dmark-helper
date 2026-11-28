@@ -12,9 +12,10 @@ wineserver exits, so edits are only safe while no process uses the prefix — th
 caller must make sure of that. A .bak copy is made before the first change.
 
 Key paths are written with single backslashes on the command line (as in regedit);
-VALUE is the string to store, or dword:XXXXXXXX for a REG_DWORD. The value (may be read from the env var WINEREG_VALUE
-instead, so secrets never appear in the process list: pass VALUE as "-").
+VALUE is the string to store, or dword:XXXXXXXX for a REG_DWORD. Pass VALUE as "-" to
+read it from the env var WINEREG_VALUE, so secrets never appear in the process list.
 """
+
 import os
 import re
 import shutil
@@ -36,7 +37,7 @@ def load(p):
 
 
 def section_range(lines, key):
-    head = re.compile(r"^\[" + re.escape(esc_key(key)) + r"\](\s+\d+)?\s*$", re.I)
+    head = re.compile(r"^\[" + re.escape(esc_key(key)) + r"\](\s+\d+)?\s*$", re.IGNORECASE)
     for i, line in enumerate(lines):
         if head.match(line):
             j = i + 1
@@ -50,8 +51,8 @@ def get(lines, key, name):
     r = section_range(lines, key)
     if not r:
         return None
-    pat = re.compile('^' + re.escape(qname(name)) + r'=(?:"(.*)"|(dword:[0-9a-f]{8}))\s*$', re.I)
-    for line in lines[r[0] + 1:r[1]]:
+    pat = re.compile("^" + re.escape(qname(name)) + r'=(?:"(.*)"|(dword:[0-9a-f]{8}))\s*$', re.IGNORECASE)
+    for line in lines[r[0] + 1 : r[1]]:
         m = pat.match(line)
         if m:
             if m.group(2):
@@ -67,7 +68,7 @@ def qname(name):
 def fmt(name, value):
     # "dword:00000002" is written raw (REG_DWORD); everything else as REG_SZ
     if re.fullmatch(r"dword:[0-9a-fA-F]{8}", value):
-        return f'{qname(name)}={value.lower()}'
+        return f"{qname(name)}={value.lower()}"
     return f'{qname(name)}="{esc_str(value)}"'
 
 
@@ -80,9 +81,9 @@ def set_(lines, key, name, value):
         block = ["", f"[{esc_key(key)}] {stamp}", f"#time={stamp:x}", entry]
         while lines and lines[-1] == "":
             lines.pop()
-        lines.extend(block + [""])
+        lines.extend([*block, ""])
         return lines
-    pat = re.compile('^' + re.escape(qname(name)) + '=', re.I)
+    pat = re.compile("^" + re.escape(qname(name)) + "=", re.IGNORECASE)
     for k in range(r[0] + 1, r[1]):
         if pat.match(lines[k]):
             lines[k] = entry
@@ -98,7 +99,9 @@ def mirror_wow64(lines, match):
     """Copy 32-bit-only COM registrations (Wow6432Node\\CLSID|Interface|TypeLib) whose
     contents mention `match` into the 64-bit view, like Windows makes them visible.
     Returns number of sections added."""
-    sec_re = re.compile(r"^\[(Software\\\\Classes\\\\)Wow6432Node\\\\((CLSID|Interface)\\\\\{[0-9A-Fa-f-]+\})(.*)\](.*)$")
+    sec_re = re.compile(
+        r"^\[(Software\\\\Classes\\\\)Wow6432Node\\\\((CLSID|Interface)\\\\\{[0-9A-Fa-f-]+\})(.*)\](.*)$"
+    )
     # pass 1: which top-level GUID keys mention `match` anywhere in their subtree
     blocks, cur = {}, None
     for i, line in enumerate(lines):
@@ -107,18 +110,24 @@ def mirror_wow64(lines, match):
             cur = m.group(2).lower() if m else None
         if cur:
             blocks.setdefault(cur, []).append(i)
-    wanted = {k for k, idx in blocks.items() if any(match.lower() in lines[j].lower() for j in idx)}
+    # compare on unescaped text so callers pass normal Windows paths (C:\\a\\b, not C:\\\\a)
+    needle = match.replace("\\\\", "\\").lower()
+    wanted = {
+        k
+        for k, idx in blocks.items()
+        if any(needle in lines[j].replace("\\\\", "\\").lower() for j in idx)
+    }
     # interfaces whose typelib/proxy points at a wanted class's typelib
     libs = set()
     for k in wanted:
         for j in blocks[k]:
-            t = re.search(r'\{[0-9A-Fa-f-]{36}\}', lines[j]) if "TypeLib" in lines[j - 2:j + 1][0] else None
+            t = re.search(r"\{[0-9A-Fa-f-]{36}\}", lines[j]) if "TypeLib" in lines[j - 2 : j + 1][0] else None
             if t:
                 libs.add(t.group(0).lower())
     for k, idx in blocks.items():
-        if k.startswith("interface") and any(l in lines[j].lower() for j in idx for l in libs):
+        if k.startswith("interface") and any(lib in lines[j].lower() for j in idx for lib in libs):
             wanted.add(k)
-    existing = {l.split("]")[0].lower() for l in lines if l.startswith("[")}
+    existing = {ln.split("]")[0].lower() for ln in lines if ln.startswith("[")}
     out, added = [], 0
     for i, line in enumerate(lines):
         m = sec_re.match(line)
@@ -128,8 +137,9 @@ def mirror_wow64(lines, match):
                 j = i + 1
                 body = []
                 while j < len(lines) and not lines[j].startswith("["):
-                    body.append(lines[j]); j += 1
-                out.append([new_head] + body)
+                    body.append(lines[j])
+                    j += 1
+                out.append([new_head, *body])
                 added += 1
     while lines and lines[-1] == "":
         lines.pop()
@@ -144,7 +154,8 @@ def mirror_wow64(lines, match):
 
 def main(a):
     if len(a) == 4 and a[1] == "mirror-wow64":
-        path = a[2]; lines = load(path)
+        path = a[2]
+        lines = load(path)
         n = mirror_wow64(lines, a[3])
         if n:
             bak = path + ".3dmark-helper.bak"

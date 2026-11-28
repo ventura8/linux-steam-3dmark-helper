@@ -14,11 +14,15 @@ prefix=${STEAM_COMPAT_DATA_PATH:+$STEAM_COMPAT_DATA_PATH/pfx}
 
 if [[ -n $pattern && -n $prefix ]]; then
   # wait for the game exe to show up (launchers/EULA can take a while), then to exit
-  for _ in $(seq 600); do pgrep -f "$pattern" >/dev/null && break; kill -0 "$child" 2>/dev/null || break; sleep 1; done
+  for _ in $(seq 600); do
+    pgrep -f "$pattern" >/dev/null && break
+    kill -0 "$child" 2>/dev/null || break
+    sleep 1
+  done
   while pgrep -f "$pattern" >/dev/null; do sleep 2; done
   sleep 5
   for ws in $(pgrep -f '[w]ineserver'); do
-    if tr '\0' '\n' < "/proc/$ws/environ" 2>/dev/null | grep -q "^WINEPREFIX=$prefix/\?$"; then
+    if tr '\0' '\n' <"/proc/$ws/environ" 2>/dev/null | grep -q "^WINEPREFIX=$prefix/\?$"; then
       WINEPREFIX="$prefix" "$(readlink -f "/proc/$ws/exe")" -k 2>/dev/null || true
     fi
   done

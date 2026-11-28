@@ -12,6 +12,7 @@ dialog no longer blocks every launch) and close the dialog. OCR is only used for
 coordinates, never for the key text itself.
 Needs: xdotool, imagemagick (import/convert), tesseract-ocr, xclip or xsel.
 """
+
 import argparse
 import os
 import re
@@ -26,7 +27,7 @@ KEYISH = re.compile(r"^[0-9A-Z]{2,6}-[0-9A-Z]{2,}")
 
 
 def run(cmd, **kw):
-    return subprocess.run(cmd, capture_output=True, text=True, **kw)
+    return subprocess.run(cmd, check=False, capture_output=True, text=True, **kw)
 
 
 def clipboard():
@@ -67,8 +68,20 @@ def ocr_words(tmp, wid):
     run(["convert", "xwd:" + raw, shot])
     width = int(run(["identify", "-format", "%w", shot]).stdout or 0)
     scale = 1 if width >= 2500 else 2  # HiDPI windows are already large enough
-    run(["convert", shot, "-colorspace", "Gray", "-resize", f"{scale * 100}%",
-         "-negate", "-threshold", "55%", pre])
+    run(
+        [
+            "convert",
+            shot,
+            "-colorspace",
+            "Gray",
+            "-resize",
+            f"{scale * 100}%",
+            "-negate",
+            "-threshold",
+            "55%",
+            pre,
+        ]
+    )
     r = run(["tesseract", pre, "-", "--psm", "11", "tsv"])
     words = []
     for line in r.stdout.splitlines()[1:]:
@@ -113,14 +126,18 @@ def main():
     ap.add_argument("appid")
     ap.add_argument("--steam-cmd", default="steam")
     ap.add_argument("--timeout", type=int, default=60)
-    ap.add_argument("--no-open", action="store_true",
-                    help="the dialog is already showing (launch-time CD key prompt)")
+    ap.add_argument(
+        "--no-open", action="store_true", help="the dialog is already showing (launch-time CD key prompt)"
+    )
     a = ap.parse_args()
 
     set_clipboard("")
     if not a.no_open:
-        subprocess.Popen(shlex.split(a.steam_cmd) + [f"steam://cdkeys/{a.appid}"],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(
+            [*shlex.split(a.steam_cmd), f"steam://cdkeys/{a.appid}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     global WID
     with tempfile.TemporaryDirectory() as tmp:
         deadline = time.time() + a.timeout

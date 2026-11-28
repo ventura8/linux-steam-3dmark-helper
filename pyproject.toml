@@ -1,0 +1,18 @@
+[project]
+name = "linux-steam-3dmark-helper"
+dynamic = ["version"]
+description = "Run Steam 3DMark, 3DMark 11 and PCMark 10 on Linux via Proton"
+requires-python = ">=3.10"
+license = "MIT"
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "PL", "RUF", "FURB"]
+ignore = [
+  "PLR0911", "PLR0912", "PLR0915", "PLR2004",  # small CLI tools: branchy by nature
+  "PLW0603",                                    # module-level state in cdkey.py is intentional
+  "SIM108",
+]

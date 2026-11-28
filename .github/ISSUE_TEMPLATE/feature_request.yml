@@ -1,0 +1,14 @@
+name: Feature request
+description: Support for another app, distro or desktop
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What should the helper do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why / which setup needs it?

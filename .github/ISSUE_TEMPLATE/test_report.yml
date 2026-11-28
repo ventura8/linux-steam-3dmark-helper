@@ -1,0 +1,46 @@
+name: Test report / bug
+description: A benchmark worked or failed on your machine
+labels: [test-report]
+body:
+  - type: markdown
+    attributes:
+      value: Run `./3dmark-helper.sh logs` first and attach the tarball. Every report fills the results table.
+  - type: dropdown
+    id: app
+    attributes:
+      label: App
+      options: [3DMark, 3DMark 11, PCMark 10]
+    validations:
+      required: true
+  - type: input
+    id: test
+    attributes:
+      label: Test(s) and result
+      placeholder: "Time Spy 2138 / Steel Nomad: No result produced"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Distro, desktop, session
+      placeholder: "Kubuntu 26.10, KDE Plasma 6, Wayland"
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and driver
+      placeholder: "RX 7800 XT, Mesa 26.2 / RTX 3080, NVIDIA 615"
+    validations:
+      required: true
+  - type: input
+    id: proton
+    attributes:
+      label: Proton version (from `doctor`)
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`./3dmark-helper.sh doctor` output"
+      render: text
+    validations:
+      required: true
