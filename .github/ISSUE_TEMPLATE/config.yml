@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: UL support (3DMark / PCMark itself)
+    url: https://support.benchmarks.ul.com/
+    about: Problems that also happen on Windows belong to UL.

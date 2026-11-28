@@ -1,0 +1,4 @@
+# SC2015: `check && ok "…" || bad "…"` is used on purpose for one-line report output;
+# ok/warn/info only print and never fail, so the `||` branch can't fire after `&&` succeeded.
+disable=SC2015
+external-sources=true

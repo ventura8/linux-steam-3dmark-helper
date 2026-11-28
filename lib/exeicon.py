@@ -4,9 +4,12 @@
 usage: exeicon.py FILE.exe OUT.png [SIZE]
 Pure python (struct) for the PE resource walk; Pillow for decoding.
 """
+
 import io
 import struct
 import sys
+
+from PIL import Image
 
 RT_ICON, RT_GROUP_ICON = 3, 14
 
@@ -20,11 +23,11 @@ def rva_to_off(sections, rva):
 
 def read_resources(data):
     pe = struct.unpack_from("<I", data, 0x3C)[0]
-    assert data[pe:pe + 4] == b"PE\0\0"
-    nsec, = struct.unpack_from("<H", data, pe + 6)
-    optsize, = struct.unpack_from("<H", data, pe + 20)
+    assert data[pe : pe + 4] == b"PE\0\0"
+    (nsec,) = struct.unpack_from("<H", data, pe + 6)
+    (optsize,) = struct.unpack_from("<H", data, pe + 20)
     opt = pe + 24
-    magic, = struct.unpack_from("<H", data, opt)
+    (magic,) = struct.unpack_from("<H", data, opt)
     dd = opt + (96 if magic == 0x10B else 112)
     res_rva, _ = struct.unpack_from("<II", data, dd + 2 * 8)
     sections = []
@@ -50,13 +53,14 @@ def read_resources(data):
             for _lang, p3 in directory(base + (p2 & 0x7FFFFFFF)):
                 rva, size = struct.unpack_from("<II", data, base + p3)
                 off = rva_to_off(sections, rva)
-                res.setdefault(typ, {})[rid] = data[off:off + size]
+                res.setdefault(typ, {})[rid] = data[off : off + size]
                 break
     return res
 
 
 def best_icon(path):
-    data = open(path, "rb").read()
+    with open(path, "rb") as f:
+        data = f.read()
     res = read_resources(data)
     icons, groups = res.get(RT_ICON, {}), res.get(RT_GROUP_ICON, {})
     if not groups:
@@ -68,17 +72,19 @@ def best_icon(path):
         w, h, cc, _, planes, bpp, size, nid = struct.unpack_from("<BBBBHHIH", grp, 6 + i * 14)
         entries.append(((w or 256), bpp, nid, w, h, cc, planes, size))
     entries.sort(reverse=True)
-    w_px, bpp, nid, w, h, cc, planes, size = entries[0]
+    _w_px, bpp, nid, w, h, cc, planes, size = entries[0]
     img = icons[nid]
     if img[:8] == b"\x89PNG\r\n\x1a\n":
         return img
     # Wrap the raw DIB in a one-entry .ico so Pillow can decode it.
-    ico = struct.pack("<HHH", 0, 1, 1) + struct.pack("<BBBBHHII", w, h, cc, 0, planes, bpp, len(img), 22) + img
+    ico = (
+        struct.pack("<HHH", 0, 1, 1) + struct.pack("<BBBBHHII", w, h, cc, 0, planes, bpp, len(img), 22) + img
+    )
     return ico
 
 
 def main():
-    from PIL import Image
+
     src, out = sys.argv[1], sys.argv[2]
     size = int(sys.argv[3]) if len(sys.argv) > 3 else 256
     im = Image.open(io.BytesIO(best_icon(src)))

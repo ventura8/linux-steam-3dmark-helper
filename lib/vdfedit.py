@@ -10,6 +10,7 @@ Commands:
 Path components are matched case-insensitively. A .bak copy is written
 before the first modification of a file.
 """
+
 import os
 import re
 import shutil
@@ -152,13 +153,13 @@ def main(argv):
     elif cmd == "compat":
         appid, tool = argv[3], argv[4]
         base = ["InstallConfigStore", "Software", "Valve", "Steam", "CompatToolMapping", appid]
-        set_value(items, base + ["name"], tool)
-        set_value(items, base + ["config"], "")
-        set_value(items, base + ["priority"], "250")
+        set_value(items, [*base, "name"], tool)
+        set_value(items, [*base, "config"], "")
+        set_value(items, [*base, "priority"], "250")
     elif cmd == "launch":
         appid, opts = argv[3], argv[4]
         base = ["UserLocalConfigStore", "Software", "Valve", "Steam", "apps", appid]
-        set_value(items, base + ["LaunchOptions"], esc(opts))
+        set_value(items, [*base, "LaunchOptions"], esc(opts))
     else:
         print(__doc__, file=sys.stderr)
         return 2
