@@ -49,9 +49,35 @@ setup() {
   [ "$output" = "%command%" ]
 }
 
-@test "proton 11 is never auto-picked" {
+@test "Experimental is preferred, Proton 10 is the fallback, PROTON_TOOL overrides" {
   source "$ROOT/3dmark-helper.sh"
+  app_installed() { [[ $1 == 1493710 ]]; }
+  run proton_tool; [ "$output" = proton_experimental ]
   app_installed() { return 1; }
-  run proton_tool
-  [ "$output" = proton_experimental ]
+  run proton_tool; [ "$output" = proton_10 ]
+  PROTON_TOOL=proton_10 run proton_tool; [ "$output" = proton_10 ]
+}
+
+@test "app table: key locations come from Steam appinfo" {
+  source "$ROOT/3dmark-helper.sh"
+  run app_keyreg 205270; [ "$output" = 'HKEY_CURRENT_USER\Software\Futuremark\3DMark11' ]
+  run app_keyreg 524390; [ -z "$output" ]
+  run app_id pcmark10; [ "$output" = 524390 ]
+}
+
+@test "systeminfo toggle edits app-settings.json" {
+  printf '[{"SCAN_SYSTEM_INFO":true,"mutable":true},{"HARDWARE_MONITORING":true}]' > "$TMP/s.json"
+  python3 "$ROOT/lib/appsettings.py" "$TMP/s.json" off
+  run python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d[0]["SCAN_SYSTEM_INFO"],d[1]["HARDWARE_MONITORING"])' "$TMP/s.json"
+  [ "$output" = "False False" ]
+}
+
+@test "winereg: set into existing section, create new section, read back" {
+  printf 'WINE REGISTRY Version 2\n\n[Software\\\\Wine\\\\DllOverrides] 1700000000\n#time=1\n"*d3d9"="native"\n\n' > "$TMP/u.reg"
+  python3 "$ROOT/lib/winereg.py" set "$TMP/u.reg" 'Software\Wine\DllOverrides' '*d3dcompiler_47' 'native,builtin'
+  WINEREG_VALUE='3DM-ICF-AAAAA-BBBBB-CCCCC-DDDDD' python3 "$ROOT/lib/winereg.py" set "$TMP/u.reg" 'Software\Futuremark\3DMark11' KeyCode -
+  run python3 "$ROOT/lib/winereg.py" get "$TMP/u.reg" 'Software\Wine\DllOverrides' '*d3dcompiler_47'; [ "$output" = native,builtin ]
+  run python3 "$ROOT/lib/winereg.py" get "$TMP/u.reg" 'Software\Wine\DllOverrides' '*d3d9'; [ "$output" = native ]
+  run python3 "$ROOT/lib/winereg.py" get "$TMP/u.reg" 'Software\Futuremark\3DMark11' KeyCode; [ "$output" = 3DM-ICF-AAAAA-BBBBB-CCCCC-DDDDD ]
+  grep -q '^\[Software\\\\Futuremark\\\\3DMark11\] ' "$TMP/u.reg"
 }

@@ -48,7 +48,7 @@ app_keyreg() {
     *) ;;  # PCMark 10 on Steam has no legacy CD key: ownership comes from Steam
   esac
 }
-app_verbs() { echo "d3dcompiler_43 d3dcompiler_47"; }
+app_verbs() { echo "d3dcompiler_47"; }
 app_desc()  { case $1 in "$APP_3DMARK") echo "GPU and CPU benchmark by UL" ;; "$APP_3DMARK11") echo "DirectX 11 benchmark by UL" ;; "$APP_PCMARK10") echo "PC performance benchmark by UL" ;; esac; }
 owns_app() {
   local f; for f in $(user_configs); do grep -q "\"$1\"" "$f" && return 0; done
@@ -137,9 +137,11 @@ logged_in() {
 }
 
 proton_tool() {
-  # Proton 11 currently breaks every DX12 test (Proton#4034, May 2026) -> prefer 10, then Experimental.
+  # Tested 2026-11-28 (Experimental 11.0-20261123b): Time Spy +10 % vs Proton 10 and Steel
+  # Nomad runs (it crashes in Proton 10's vkd3d-proton). The May 2026 Proton 11 DX12 refusal
+  # (Proton#4034) is gone in this build. PROTON_TOOL=proton_10 falls back.
   if [[ -n ${PROTON_TOOL:-} ]]; then echo "$PROTON_TOOL"; return; fi
-  if app_installed $APP_PROTON10; then echo proton_10; else echo proton_experimental; fi
+  if app_installed $APP_PROTON_EXP; then echo proton_experimental; else echo proton_10; fi
 }
 
 # ---------- GPU detection ----------
@@ -149,6 +151,12 @@ detect_gpus() {
 }
 has_gpu() { [[ " $GPU_VENDORS " == *" $1 "* ]]; }
 nvidia_ver() { nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 | cut -d. -f1; }
+
+# The wrapper lives inside the Steam folder so Snap/Flatpak Steam can execute it.
+install_wrapper() {
+  [[ -n $STEAM_ROOT && -d $STEAM_ROOT ]] || return 1
+  install -m755 "$HERE/lib/launch-wrapper.sh" "$STEAM_ROOT/3dmark-helper-launch.sh" 2>/dev/null && echo "$STEAM_ROOT/3dmark-helper-launch.sh"
+}
 
 launch_options() {
   local app=$1 env=()
@@ -164,7 +172,9 @@ launch_options() {
   fi
   [[ $app == "$APP_3DMARK" ]] && env+=("VKD3D_CONFIG=dxr,dxr11")
   [[ ${OSMESA:-0} == 1 ]] && { local p="${env[*]}"; echo "${p:+$p }%command% --use-gl=osmesa"; return; }
-  local pre="${env[*]}"; echo "${pre:+$pre }%command%"
+  local wrap=""; [[ ${NO_WRAPPER:-0} == 1 ]] || wrap=$(install_wrapper || true)
+  [[ -n $wrap ]] && env+=("APP_PROC='$(app_proc "$app")'")
+  local pre="${env[*]}"; echo "${pre:+$pre }${wrap:+\"$wrap\" }%command%"
 }
 
 # ---------- commands ----------
@@ -185,7 +195,7 @@ cmd_doctor() {
     [[ -n $v ]] && { dpkg -s "libnvidia-gl-$v:i386" &>/dev/null && ok "libnvidia-gl-$v:i386" || bad "libnvidia-gl-$v:i386 missing"; }
   fi
   command -v vulkaninfo &>/dev/null && { vulkaninfo --summary 2>/dev/null | grep -E 'deviceName' | sed 's/^ */  /' || true; } || warn "vulkan-tools not installed"
-  command -v protontricks &>/dev/null && ok "protontricks $(protontricks --version 2>/dev/null | head -1)" || bad "protontricks missing"
+  command -v tesseract &>/dev/null && ok "tesseract (automatic CD keys on X11)" || warn "tesseract-ocr missing: CD keys need one click (run: $0 deps)"
   info "Steam"
   if detect_steam; then ok "Steam ($STEAM_KIND) at $STEAM_ROOT"; else bad "Steam not installed / never started"; return 1; fi
   logged_in && ok "a Steam account is logged in" || bad "no Steam login yet"
@@ -201,7 +211,6 @@ cmd_doctor() {
     else continue; fi
     local tool; tool=$($VDF get "$STEAM_ROOT/config/config.vdf" "InstallConfigStore/Software/Valve/Steam/CompatToolMapping/$id/name" 2>/dev/null || true)
     [[ -n $tool ]] && ok "$name compat tool: $tool" || warn "$name: no forced Proton version (run setup)"
-    [[ $tool == proton_11* ]] && bad "$name forced to Proton 11 — DX12 tests break there"
     local lo; lo=$(for f in $(user_configs); do $VDF get "$f" "UserLocalConfigStore/Software/Valve/Steam/apps/$id/LaunchOptions" 2>/dev/null || true; done | head -1)
     [[ -n $lo ]] && ok "$name launch options: $lo" || warn "$name: no launch options set"
     if app_prefix "$id" >/dev/null; then
@@ -221,7 +230,7 @@ cmd_doctor() {
 cmd_deps() {
   info "Installing system dependencies (needs sudo)"
   detect_gpus
-  local pkgs=(libvulkan1 libvulkan1:i386 mesa-vulkan-drivers mesa-vulkan-drivers:i386 vulkan-tools protontricks winetricks python3 python3-pil pciutils xclip xsel wl-clipboard xdotool x11-apps imagemagick tesseract-ocr)
+  local pkgs=(libvulkan1 libvulkan1:i386 mesa-vulkan-drivers mesa-vulkan-drivers:i386 vulkan-tools python3 curl python3-pil pciutils xclip xsel wl-clipboard xdotool x11-apps imagemagick tesseract-ocr)
   if has_gpu 10de; then
     local v; v=$(nvidia_ver)
     if [[ -n $v ]]; then pkgs+=("libnvidia-gl-$v:i386"); else warn "NVIDIA GPU found but no working driver — install one with: sudo ubuntu-drivers install"; fi
@@ -305,7 +314,7 @@ wait_installed() {
 }
 
 install_dir_of() {
-  case $1 in "$APP_PROTON10") echo "Proton 10.0" ;; "$APP_SLR3") echo "SteamLinuxRuntime_sniper" ;; *) app_name "$1" ;; esac
+  case $1 in "$APP_PROTON10") echo "Proton 10.0" ;; "$APP_PROTON_EXP") echo "Proton - Experimental" ;; "$APP_SLR3") echo "SteamLinuxRuntime_sniper" ;; *) app_name "$1" ;; esac
 }
 
 # Queue a download without any Steam dialog: Steam picks up an appmanifest with
@@ -336,7 +345,7 @@ cmd_install_apps() {
   detect_steam || die "Steam not found"
   logged_in || cmd_login
   local id want=()
-  for id in $APP_SLR3 $APP_PROTON10 $APP_3DMARK $APP_3DMARK11 $APP_PCMARK10; do
+  for id in $APP_SLR3 $APP_PROTON_EXP $APP_PROTON10 $APP_3DMARK $APP_3DMARK11 $APP_PCMARK10; do
     [[ $id == "$APP_3DMARK11" && ${SKIP_3DMARK11:-0} == 1 ]] && continue
     if [[ $id == "$APP_PCMARK10" || $id == "$APP_3DMARK11" ]] && ! owns_app "$id"; then
       continue  # only install what the account owns
@@ -347,13 +356,13 @@ cmd_install_apps() {
   ((${#want[@]})) || return 0
   # Install Proton 10 first so the apps can be mapped to it (not Experimental).
   local tools=() x
-  for x in "${want[@]}"; do [[ $x == "$APP_PROTON10" || $x == "$APP_SLR3" ]] && tools+=("$x"); done
+  for x in "${want[@]}"; do [[ $x == "$APP_PROTON10" || $x == "$APP_PROTON_EXP" || $x == "$APP_SLR3" ]] && tools+=("$x"); done
   if ((${#tools[@]})); then
     stop_steam
     for x in "${tools[@]}"; do write_stub_manifest "$x"; done
     (steam_cmd -silent &>/tmp/3dmark-helper-steam.log &)
     for x in "${tools[@]}"; do wait_installed "$x" "$(install_dir_of "$x")"; done
-    local rest=(); for x in "${want[@]}"; do [[ $x != "$APP_PROTON10" && $x != "$APP_SLR3" ]] && rest+=("$x"); done
+    local rest=(); for x in "${want[@]}"; do [[ $x != "$APP_PROTON10" && $x != "$APP_PROTON_EXP" && $x != "$APP_SLR3" ]] && rest+=("$x"); done
     want=("${rest[@]}")
     ((${#want[@]})) || return 0
   fi
@@ -381,11 +390,6 @@ cmd_setup() {
   ok "Launch options: $lo"
 }
 
-proton_run() {
-  # protontricks wrapper that works for deb/snap/flatpak Steam
-  local id=$1; shift
-  STEAM_DIR="$STEAM_ROOT" protontricks "$@" "$id"
-}
 
 # Steam blocks the first launch on the publisher EULA; that needs a human click.
 eula_pending() {
@@ -427,6 +431,9 @@ launch_app() {
   for _ in $(seq 20); do
     sleep 2
     if cdkey_prompt_pending "$id"; then handle_cdkey_prompt "$id"; fi
+    if tail -n 200 "$STEAM_ROOT/logs/console_log.txt" 2>/dev/null | grep "AppID $id, " | tail -1 | grep -q 'waiting for user response to KickingOtherSession'; then
+      die "Steam allows one running app per account: something (see Steam) is running on another PC with this account. Close it there, dismiss the prompt in Steam, and retry."
+    fi
     if eula_pending "$id"; then
       warn "Steam is showing the license agreement (EULA) for app $id — accept it in the Steam window. Waiting..."
       for _ in $(seq 600); do eula_pending "$id" || return 0; sleep 2; done
@@ -444,11 +451,29 @@ tool_version() {
   [[ $(proton_tool) == proton_experimental ]] && d="$STEAM_ROOT/steamapps/common/Proton - Experimental"
   sed -n 's/^CURRENT_PREFIX_VERSION="\(.*\)"/\1/p' "$d/proton" 2>/dev/null | head -1
 }
+# wineserver pid serving this app's prefix (if any)
+prefix_wineserver() {
+  local p
+  for p in $(pgrep -f '[w]ineserver' 2>/dev/null); do
+    tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null | grep -q "^WINEPREFIX=.*compatdata/$1/pfx" && { echo "$p"; return 0; }
+  done
+  return 1
+}
 stop_app() {
-  local id=$1
-  app_running "$id" || return 0
-  pkill -f "$(app_proc "$id")" || true
-  for _ in $(seq 30); do app_running "$id" || return 0; sleep 2; done
+  local id=$1 ws exe
+  if app_running "$id"; then
+    pkill -f "$(app_proc "$id")" || true
+    for _ in $(seq 30); do app_running "$id" || break; sleep 2; done
+  fi
+  # UL SystemInfo's scanner outlives the app under Wine and keeps the session (and Steam's
+  # "running" state) alive: end the prefix's wineserver cleanly.
+  sleep 3
+  if ws=$(prefix_wineserver "$id"); then
+    exe=$(readlink -f "/proc/$ws/exe")
+    WINEPREFIX="$(app_prefix "$id")" "$exe" -k 2>/dev/null || true
+    for _ in $(seq 20); do prefix_wineserver "$id" >/dev/null || return 0; sleep 1; done
+  fi
+  return 0
 }
 prefix_ready() {
   local id=$1 want; want=$(tool_version)
@@ -488,21 +513,55 @@ existing_key() {
     | grep -oE '"KeyCode"="[0-9A-Z]{2,6}(-[0-9A-Z]{3,6}){3,}"' | head -1 | cut -d'"' -f4
 }
 
+# Wine rewrites user.reg when its wineserver exits: only edit an idle prefix.
+wait_prefix_idle() {
+  local id=$1 p busy
+  for _ in $(seq 60); do
+    busy=0
+    for p in $(pgrep -f '[w]ineserver' 2>/dev/null); do
+      tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null | grep -q "^WINEPREFIX=.*compatdata/$id/pfx" && busy=1
+    done
+    ((busy)) || return 0
+    sleep 2
+  done
+  die "$(app_name "$id") prefix is still in use; close the app and retry"
+}
+reg_set() { WINEREG_VALUE=$4 python3 -I "$HERE/lib/winereg.py" set "$1" "$2" "$3" -; }
+
+# Native d3dcompiler_47 (the builtin one can't compile 3DMark's SM5.1 shaders).
+# Same files and checksums as winetricks; installed without running Wine.
+D3DC47_64=(https://raw.githubusercontent.com/mozilla/fxc2/master/dll/d3dcompiler_47.dll 4432bbd1a390874f3f0a503d45cc48d346abc3a8c0213c289f4b615bf0ee84f3)
+D3DC47_32=(https://raw.githubusercontent.com/mozilla/fxc2/master/dll/d3dcompiler_47_32.dll 2ad0d4987fc4624566b190e747c9d95038443956ed816abfd1e2d389b5ec0851)
+fetch() {  # url sha256 -> cached path
+  local cache="$HOME/.cache/3dmark-helper" f; f="$cache/$(basename "$1")"
+  mkdir -p "$cache"
+  for c in "$f" "$HOME/.cache/winetricks/d3dcompiler_47/$(basename "$1")"; do
+    [[ -f $c ]] && echo "$2  $c" | sha256sum -c --status && { echo "$c"; return 0; }
+  done
+  curl -fsSL --retry 3 -o "$f.part" "$1" && echo "$2  $f.part" | sha256sum -c --status && mv "$f.part" "$f" && echo "$f"
+}
+install_dll() {
+  local id=$1 dll=$2 pfx src64 src32
+  [[ $dll == d3dcompiler_47 ]] || die "unknown dll $dll"
+  pfx=$(app_prefix "$id")
+  src64=$(fetch "${D3DC47_64[@]}") && src32=$(fetch "${D3DC47_32[@]}") || die "could not download d3dcompiler_47"
+  install -m644 "$src64" "$pfx/drive_c/windows/system32/d3dcompiler_47.dll"
+  install -m644 "$src32" "$pfx/drive_c/windows/syswow64/d3dcompiler_47.dll"
+  reg_set "$pfx/user.reg" 'Software\Wine\DllOverrides' '*d3dcompiler_47' 'native,builtin'
+  info "$(app_name "$id"): installed native d3dcompiler_47"
+}
+
 cmd_prefix() {
   local id; id=$(app_id "${1:-3dmark}")
   detect_steam || die "Steam not found"
   ensure_prefix "$id"
   stop_app "$id"
-  local verbs v missing=()
+  wait_prefix_idle "$id"
+  local verbs v
   verbs=$(app_verbs "$id")
-  for v in $verbs; do has_override "$id" "$v" || missing+=("$v"); done
-  if ((${#missing[@]})); then
-    info "Installing ${missing[*]} into the $(app_name "$id") prefix (Time Spy etc. need the native shader compiler)"
-    STEAM_DIR="$STEAM_ROOT" protontricks --no-bwrap "$id" -q --force "${missing[@]}" >/dev/null 2>&1 || \
-      STEAM_DIR="$STEAM_ROOT" protontricks "$id" -q --force "${missing[@]}" >/dev/null 2>&1 || true
-  fi
+  for v in $verbs; do has_override "$id" "$v" || install_dll "$id" "$v"; done
   for v in $verbs; do has_override "$id" "$v" || die "$v override missing after install ($(app_name "$id"))"; done
-  ok "$(app_name "$id") prefix ready ($(prefix_proton_version "$id"), ${verbs// /, })"
+  ok "$(app_name "$id") prefix ready ($(prefix_proton_version "$id"), native ${verbs// /, })"
 }
 
 # Fetch the CD key without asking: X11 sessions read it from Steam's CD-key dialog
@@ -528,16 +587,15 @@ cmd_key() {
   [[ -z $(app_keyreg "$id") ]] && { ok "$(app_name "$id") uses Steam ownership (no CD key needed)"; return 0; }
   ensure_prefix "$id"
   if has_key "$id"; then ok "$(app_name "$id") key already registered"; return 0; fi
-  local key; key=${2:-}; [[ -n $key ]] || key=$(existing_key "$id"); [[ -n $key ]] || key=$LAUNCH_KEY
+  local key; key=${2:-}; [[ -n $key ]] || key=$(existing_key "$id" || true); [[ -n $key ]] || key=$LAUNCH_KEY
   [[ -n $key ]] || key=$(get_key "$id") || true
   [[ $key =~ ^[0-9A-Z]{2,6}(-[0-9A-Z]{3,6}){3,6}$ ]] || { warn "no CD key obtained for $(app_name "$id") — it will open in demo mode"; return 0; }
   stop_app "$id"
-  # write via a private .reg file so the key never shows up in `ps`
-  local pfx reg; pfx=$(app_prefix "$id"); reg="$pfx/drive_c/windows/temp/3dmh-key.reg"
-  ( umask 077; { echo 'Windows Registry Editor Version 5.00'; echo
-      app_keyreg "$id" | while read -r path; do printf '[%s]\n"KeyCode"="%s"\n\n' "$path" "$key"; done; } > "$reg" )
-  STEAM_DIR="$STEAM_ROOT" protontricks --no-bwrap -c 'wine regedit /S "C:\\windows\\temp\\3dmh-key.reg"; wineserver -w' "$id" >/dev/null 2>&1 || true
-  rm -f "$reg"
+  wait_prefix_idle "$id"
+  local pfx path; pfx=$(app_prefix "$id")
+  while read -r path; do
+    reg_set "$pfx/user.reg" "${path#HKEY_CURRENT_USER\\}" KeyCode "$key"   # value via env, never in ps
+  done < <(app_keyreg "$id")
   has_key "$id" && ok "$(app_name "$id") key registered" || die "could not write the $(app_name "$id") key into the prefix"
 }
 
@@ -650,6 +708,49 @@ cmd_tests() {
   ok "3DMark tests installed: $(find "$(dirname "$m")/common/3DMark/dlc" -mindepth 1 -maxdepth 1 -type d -printf '%f ' 2>/dev/null)"
 }
 
+# UL SystemInfo under Proton. Out of the box its COM service (FMSISvc) can't be reached:
+#  1. its class is registered only in the 32-bit view (Wow6432Node) -> 64-bit apps get
+#     "class not registered" (3DMark 11: "SystemInfo initialization failed");
+#  2. when started on demand it asks the SCM to start RpcSs from inside its own start
+#     and Wine fails that nested start;
+#  3. the typelib used for 32/64-bit marshaling has only a win32 entry.
+# fix: mirror the classes to the 64-bit view, auto-start RpcSs, add the win64 typelib entry.
+SI_TYPELIB='Software\Classes\Typelib\{0E985ACA-E998-460F-B705-8436E606F78C}\1.0\0'
+si_fix_prefix() {
+  local id=$1 pfx sys W="python3 -I $HERE/lib/winereg.py"
+  pfx=$(app_prefix "$id") || return 0
+  [[ -d "$pfx/drive_c/Program Files (x86)/Futuremark/SystemInfo" ]] || return 0
+  sys="$pfx/system.reg"
+  stop_app "$id"; wait_prefix_idle "$id"
+  $W set "$sys" 'System\ControlSet001\Services\RpcSs' Start dword:00000002
+  $W mirror-wow64 "$sys" 'Futuremark\SystemInfo' >/dev/null
+  local lib; lib=$($W get "$sys" "$SI_TYPELIB\\win32" @ 2>/dev/null || true)
+  [[ -n $lib ]] && $W set "$sys" "$SI_TYPELIB\\win64" @ "$lib"
+  ok "$(app_name "$id"): SystemInfo service made reachable"
+}
+settings_file() {
+  local pfx; pfx=$(app_prefix "$1") || return 1
+  case $1 in
+    "$APP_PCMARK10") echo "$pfx/drive_c/users/steamuser/AppData/Local/UL/PCMark 10/app-settings.json" ;;
+    "$APP_3DMARK") echo "$pfx/drive_c/users/steamuser/AppData/Local/UL/3DMark/app-settings.json" ;;
+    *) return 1 ;;
+  esac
+}
+cmd_systeminfo() {
+  local si_mode=${1:-fix} app id f
+  [[ $si_mode =~ ^(fix|on|off)$ ]] || die "usage: systeminfo fix|on|off"
+  detect_steam || die "Steam not found"
+  for app in "${ALL_APPS[@]}"; do
+    id=$(app_id "$app"); app_installed "$id" || continue
+    si_fix_prefix "$id"
+    [[ $si_mode == fix ]] && continue
+    f=$(settings_file "$id") || continue
+    [[ -f $f ]] || { warn "$(app_name "$id"): settings not created yet (launch it once)"; continue; }
+    stop_app "$id"
+    python3 -I "$HERE/lib/appsettings.py" "$f" "$si_mode" >/dev/null && ok "$(app_name "$id"): SystemInfo scan $si_mode"
+  done
+}
+
 cmd_logs() {
   detect_steam || die "Steam not found"
   local out; out="$HOME/3dmark-helper-logs-$(date +%Y%m%d-%H%M%S).tar.gz"
@@ -678,6 +779,7 @@ cmd_install() {
     cmd_prefix "$app"
     cmd_key "$app"
   done
+  cmd_systeminfo fix
   cmd_shortcuts
   cmd_doctor || true
   info "Done. Start 3DMark / PCMark from your app menu or Steam. Working tests: Fire Strike, Time Spy, Port Royal (RT GPUs), Night Raid, Sky Diver, Cloud Gate, Ice Storm, CPU Profile, feature tests. See README for the full matrix."
@@ -688,7 +790,7 @@ usage() {
 Usage: $0 [--ask] <command> [args]   (default: fully automatic)
   install                 full guided flow: deps, Steam, login, install apps, configure
   doctor                  check everything and print a pass/fail report
-  deps                    install 32-bit Vulkan, protontricks, etc. (sudo)
+  deps                    install 32-bit Vulkan, OCR/X tools, etc. (sudo)
   install-steam           install Steam if missing
   login                   start Steam and wait for you to log in
   install-apps            install Proton 10 + every owned app (3DMark, 3DMark 11, PCMark 10)
@@ -697,6 +799,7 @@ Usage: $0 [--ask] <command> [args]   (default: fully automatic)
   key <app> [KEY]         fetch the CD key from Steam automatically and register it
   launch-options <app>    print recommended launch options for this machine
   headless                force a display output on monitor-less (VNC) machines so Steam can show windows
+  systeminfo fix|on|off   make UL SystemInfo work under Proton (fix, default) / toggle scanning
   tests                   download every 3DMark test that works on Linux (STORAGE=1 adds the 30 GB storage test)
   shortcuts               add 3DMark / 3DMark 11 to the app menu with proper icons
   logs                    bundle diagnostics into ~/3dmark-helper-logs-*.tar.gz
@@ -722,6 +825,7 @@ main() {
     launch-options) detect_steam || true; launch_options "$(app_id "${1:-3dmark}")" ;;
     logs) cmd_logs ;;
     tests) cmd_tests ;;
+    systeminfo) cmd_systeminfo "$@" ;;
     shortcuts) cmd_shortcuts ;;
     headless) cmd_headless ;;
     -V|--version|version) echo "linux-steam-3dmark-helper $VERSION" ;;
