@@ -46,6 +46,7 @@ What `install` does, with no questions asked:
 | `key <app> [KEY]` | fetch the CD key from Steam automatically and register it |
 | `systeminfo fix\|on\|off` | SystemInfo service fix (always) + scan on/off |
 | `shortcuts` | app-menu entries + icons |
+| `titlebar` | real title bars: KDE (KWin rule), LXQt (Openbox / labwc rule); XFCE already has them |
 | `launch-options <app>`, `logs` | inspect / bug-report bundle |
 
 Apps: `3dmark`, `3dmark11`, `pcmark10`. Env: `PROTON_TOOL=proton_10`, `OSMESA=1`, `STORAGE=1`, `NO_WRAPPER=1`, `--ask` (confirm each step).
@@ -97,7 +98,7 @@ One catch: with the **scan** enabled, 3DMark wrongly blocks Time Spy and Night R
 | CD key | 1 click (Wayland blocks synthetic input) | automatic (OCR + click) | Wayland: 1 click · X11: automatic | automatic |
 | Menu entry + taskbar icon | ✅ `StartupWMClass=steam_app_<id>` | ✅ | ✅ (+ `kbuildsycoca6` refresh) | ✅ |
 | Clipboard | wl-paste | xclip/xsel | wl-paste / Klipper | xclip/xsel |
-| 3DMark title bar | none (app draws its own frame) | ✅ drawn by xfwm4 | KWin: Alt+F3 menu | Openbox: Alt+Space menu |
+| 3DMark title bar | none (Mutter can't override) | ✅ drawn by xfwm4 | ✅ KWin rule written by `titlebar` | ✅ Openbox (X11) / labwc (Wayland) rule written by `titlebar` |
 | Status | ✅ laptop | ✅ NUC | needs testers | needs testers |
 
 Everything the helper does is desktop-neutral (XDG `.desktop`, hicolor icons, X11/XWayland window capture); the differences above are only in how the CD-key dialog is clicked and how windows are managed.

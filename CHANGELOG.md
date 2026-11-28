@@ -4,6 +4,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/), versions: [SemVer](http
 
 ## [Unreleased]
 ### Added
+- `titlebar`: real minimise/maximise/close on KDE Plasma (KWin rule) and LXQt (Openbox on X11, labwc on Wayland); desktop detection; clipboard tries X11, Wayland and Klipper.
 - PCMark 10 (524390) support; every owned app is installed and configured.
 - UL SystemInfo works under Proton (3DMark 11 starts and detects CPU/GPU): WoW64 COM mirroring, RpcSs auto-start, win64 typelib, launch wrapper that ends the leftover session.
 - `tests`: downloads every Linux-capable 3DMark test in one go (Steam `optionaldlc`).

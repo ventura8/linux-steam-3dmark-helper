@@ -78,7 +78,7 @@ detect_steam() {
 import_session_env() {
   [[ -n ${DBUS_SESSION_BUS_ADDRESS:-} && -n ${DISPLAY:-}${WAYLAND_DISPLAY:-} ]] && return 0
   local p pid
-  for p in gnome-shell plasmashell xfce4-panel lxqt-panel xfce4-session lxqt-session ksmserver; do
+  for p in gnome-shell plasmashell kwin_wayland kwin_x11 ksmserver xfce4-panel xfce4-session lxqt-panel lxqt-session openbox labwc; do
     pid=$(pgrep -u "$(id -u)" -x "$p" | head -1) && [[ -n $pid ]] && break
   done
   [[ -n ${pid:-} && -r /proc/$pid/environ ]] || return 1
@@ -181,7 +181,7 @@ launch_options() {
 cmd_doctor() {
   FAILS=0
   info "System"
-  . /etc/os-release; ok "$PRETTY_NAME, kernel $(uname -r), desktop ${XDG_CURRENT_DESKTOP:-?} (${XDG_SESSION_TYPE:-?})"
+  . /etc/os-release; ok "desktop profile: $(detect_desktop)"; ok "$PRETTY_NAME, kernel $(uname -r), desktop ${XDG_CURRENT_DESKTOP:-?} (${XDG_SESSION_TYPE:-?})"
   detect_gpus
   while read -r l; do ok "GPU: $l"; done < <(lspci | grep -iE 'vga|3d controller|display' | cut -d: -f3-)
   info "Drivers / Vulkan"
@@ -600,10 +600,15 @@ cmd_key() {
 }
 
 clipboard() {
-  if [[ -n ${WAYLAND_DISPLAY:-} ]] && command -v wl-paste &>/dev/null; then wl-paste -n 2>/dev/null
-  elif command -v xclip &>/dev/null; then xclip -o -selection clipboard 2>/dev/null
-  elif command -v xsel &>/dev/null; then xsel -ob 2>/dev/null
-  elif command -v qdbus &>/dev/null; then qdbus org.kde.klipper /klipper getClipboardContents 2>/dev/null; fi
+  # Steam runs under X11/XWayland, so its copy lands in the X clipboard; Wayland
+  # compositors (Mutter, KWin, labwc) sync it to the Wayland one as well.
+  local c=""
+  command -v xclip &>/dev/null && c=$(xclip -o -selection clipboard 2>/dev/null)
+  [[ -z $c ]] && command -v xsel &>/dev/null && c=$(xsel -ob 2>/dev/null)
+  [[ -z $c && -n ${WAYLAND_DISPLAY:-} ]] && command -v wl-paste &>/dev/null && c=$(wl-paste -n 2>/dev/null)
+  [[ -z $c ]] && command -v qdbus &>/dev/null && c=$(qdbus org.kde.klipper /klipper getClipboardContents 2>/dev/null)
+  [[ -z $c ]] && command -v qdbus6 &>/dev/null && c=$(qdbus6 org.kde.klipper /klipper getClipboardContents 2>/dev/null)
+  printf '%s' "$c"
 }
 # A real key looks like 3DM-ICF-XXXXX-XXXXX-XXXXX-XXXXX (older: 4-char groups).
 wait_clipboard_key() {
@@ -751,6 +756,42 @@ cmd_systeminfo() {
   done
 }
 
+# Real title bars where the window manager can be told to override the app's
+# borderless window: KDE (KWin rule), LXQt X11 (Openbox), LXQt Wayland (labwc).
+# GNOME/Mutter can't; XFCE (xfwm4) already does it.
+detect_desktop() {
+  import_session_env || true
+  local d=${XDG_CURRENT_DESKTOP:-}
+  case ${d,,} in
+    *kde*|*plasma*) echo kde ;;
+    *lxqt*) if [[ ${XDG_SESSION_TYPE:-} == wayland ]] || pgrep -x labwc >/dev/null; then echo lxqt-labwc; else echo lxqt-openbox; fi ;;
+    *xfce*) echo xfce ;;
+    *gnome*|*unity*|*ubuntu*) echo gnome ;;
+    *) pgrep -x openbox >/dev/null && echo lxqt-openbox || echo other ;;
+  esac
+}
+cmd_titlebar() {
+  local de r; de=$(detect_desktop)
+  case $de in
+    kde)
+      r=$(python3 -I "$HERE/lib/titlebar.py" kde "${XDG_CONFIG_HOME:-$HOME/.config}/kwinrulesrc")
+      { qdbus6 org.kde.KWin /KWin reconfigure || qdbus org.kde.KWin /KWin reconfigure || \
+        dbus-send --session --type=method_call --dest=org.kde.KWin /KWin org.kde.KWin.reconfigure; } &>/dev/null || true
+      ok "KDE: KWin rule forces a title bar on 3DMark/PCMark windows ($r)" ;;
+    lxqt-openbox)
+      r=$(python3 -I "$HERE/lib/titlebar.py" openbox "${XDG_CONFIG_HOME:-$HOME/.config}/openbox/lxqt-rc.xml")
+      openbox --reconfigure &>/dev/null || true
+      ok "LXQt (Openbox): title bar rule added ($r)" ;;
+    lxqt-labwc)
+      r=$(python3 -I "$HERE/lib/titlebar.py" labwc "${XDG_CONFIG_HOME:-$HOME/.config}/labwc/rc.xml")
+      labwc --reconfigure &>/dev/null || true
+      ok "LXQt (labwc): title bar rule added ($r)" ;;
+    xfce) ok "XFCE: xfwm4 already draws title bars" ;;
+    gnome) warn "GNOME can't add a title bar to 3DMark's borderless window: Super+H minimise, Super+↑ maximise, Alt+F4 close" ;;
+    *) warn "unknown desktop '${XDG_CURRENT_DESKTOP:-?}': no title-bar rule written" ;;
+  esac
+}
+
 cmd_logs() {
   detect_steam || die "Steam not found"
   local out; out="$HOME/3dmark-helper-logs-$(date +%Y%m%d-%H%M%S).tar.gz"
@@ -781,6 +822,7 @@ cmd_install() {
   done
   cmd_systeminfo off   # service fix for all + scan off (3DMark otherwise blocks Time Spy: "CPU lacks SSSE3")
   cmd_shortcuts
+  cmd_titlebar
   cmd_doctor || true
   info "Done. Start 3DMark / PCMark from your app menu or Steam. Working tests: Fire Strike, Time Spy, Port Royal (RT GPUs), Night Raid, Sky Diver, Cloud Gate, Ice Storm, CPU Profile, feature tests. See README for the full matrix."
 }
@@ -803,6 +845,7 @@ Usage: $0 [--ask] <command> [args]   (default: fully automatic)
                           install uses "off": with scanning on, 3DMark wrongly blocks Time Spy/Night Raid
                           ("CPU does not support SSSE3") because Wine hides the CPU feature flags
   tests                   download every 3DMark test that works on Linux (STORAGE=1 adds the 30 GB storage test)
+  titlebar                real title bars on KDE (KWin rule) and LXQt (Openbox / labwc rule)
   shortcuts               add 3DMark / 3DMark 11 to the app menu with proper icons
   logs                    bundle diagnostics into ~/3dmark-helper-logs-*.tar.gz
 Apps: 3dmark, 3dmark11, pcmark10
@@ -829,6 +872,7 @@ main() {
     tests) cmd_tests ;;
     systeminfo) cmd_systeminfo "$@" ;;
     shortcuts) cmd_shortcuts ;;
+    titlebar) cmd_titlebar ;;
     headless) cmd_headless ;;
     -V|--version|version) echo "linux-steam-3dmark-helper $VERSION" ;;
     -h|--help|help) usage ;;

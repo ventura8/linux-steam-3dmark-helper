@@ -81,3 +81,37 @@ setup() {
   run python3 "$ROOT/lib/winereg.py" get "$TMP/u.reg" 'Software\Futuremark\3DMark11' KeyCode; [ "$output" = 3DM-ICF-AAAAA-BBBBB-CCCCC-DDDDD ]
   grep -q '^\[Software\\\\Futuremark\\\\3DMark11\] ' "$TMP/u.reg"
 }
+
+@test "titlebar: KDE KWin rule is added once and keeps existing rules" {
+  printf '[General]\ncount=1\nrules=abc\n\n[abc]\nDescription=mine\n' > "$TMP/kwinrulesrc"
+  run python3 "$ROOT/lib/titlebar.py" kde "$TMP/kwinrulesrc"; [ "$output" = changed ]
+  run python3 "$ROOT/lib/titlebar.py" kde "$TMP/kwinrulesrc"; [ "$output" = unchanged ]
+  grep -q '^rules=abc,3dmark-helper-titlebar$' "$TMP/kwinrulesrc"
+  grep -q '^count=2$' "$TMP/kwinrulesrc"
+  grep -q '^noborderrule=2$' "$TMP/kwinrulesrc"
+  grep -q '^Description=mine$' "$TMP/kwinrulesrc"
+}
+
+@test "titlebar: Openbox (LXQt) application rule in existing namespaced rc.xml" {
+  printf '<?xml version="1.0"?>\n<openbox_config xmlns="http://openbox.org/3.4/rc"><theme><name>Clearlooks</name></theme><applications/></openbox_config>\n' > "$TMP/lxqt-rc.xml"
+  run python3 "$ROOT/lib/titlebar.py" openbox "$TMP/lxqt-rc.xml"; [ "$output" = changed ]
+  run python3 "$ROOT/lib/titlebar.py" openbox "$TMP/lxqt-rc.xml"; [ "$output" = unchanged ]
+  python3 -c 'import xml.etree.ElementTree as E,sys; r=E.parse(sys.argv[1]).getroot(); n="{http://openbox.org/3.4/rc}"; a=r.find(n+"applications/"+n+"application"); assert a.get("class")=="steam_app_*" and a.find(n+"decor").text=="yes"; assert r.find(n+"theme/"+n+"name").text=="Clearlooks"' "$TMP/lxqt-rc.xml"
+}
+
+@test "titlebar: labwc window rule created from scratch" {
+  run python3 "$ROOT/lib/titlebar.py" labwc "$TMP/labwc/rc.xml"; [ "$output" = changed ]
+  grep -q 'identifier="steam_app_\*"' "$TMP/labwc/rc.xml"
+  grep -q 'serverDecoration="yes"' "$TMP/labwc/rc.xml"
+}
+
+@test "detect_desktop maps XDG_CURRENT_DESKTOP" {
+  source "$ROOT/3dmark-helper.sh"
+  import_session_env() { :; }
+  pgrep() { return 1; }
+  XDG_CURRENT_DESKTOP=KDE run detect_desktop; [ "$output" = kde ]
+  XDG_CURRENT_DESKTOP=LXQt XDG_SESSION_TYPE=x11 run detect_desktop; [ "$output" = lxqt-openbox ]
+  XDG_CURRENT_DESKTOP=LXQt XDG_SESSION_TYPE=wayland run detect_desktop; [ "$output" = lxqt-labwc ]
+  XDG_CURRENT_DESKTOP=ubuntu:GNOME run detect_desktop; [ "$output" = gnome ]
+  XDG_CURRENT_DESKTOP=XFCE run detect_desktop; [ "$output" = xfce ]
+}
