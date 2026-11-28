@@ -779,7 +779,7 @@ cmd_install() {
     cmd_prefix "$app"
     cmd_key "$app"
   done
-  cmd_systeminfo fix
+  cmd_systeminfo off   # service fix for all + scan off (3DMark otherwise blocks Time Spy: "CPU lacks SSSE3")
   cmd_shortcuts
   cmd_doctor || true
   info "Done. Start 3DMark / PCMark from your app menu or Steam. Working tests: Fire Strike, Time Spy, Port Royal (RT GPUs), Night Raid, Sky Diver, Cloud Gate, Ice Storm, CPU Profile, feature tests. See README for the full matrix."
@@ -799,7 +799,9 @@ Usage: $0 [--ask] <command> [args]   (default: fully automatic)
   key <app> [KEY]         fetch the CD key from Steam automatically and register it
   launch-options <app>    print recommended launch options for this machine
   headless                force a display output on monitor-less (VNC) machines so Steam can show windows
-  systeminfo fix|on|off   make UL SystemInfo work under Proton (fix, default) / toggle scanning
+  systeminfo fix|on|off   make UL SystemInfo reachable under Proton (always) and toggle 3DMark/PCMark scanning.
+                          install uses "off": with scanning on, 3DMark wrongly blocks Time Spy/Night Raid
+                          ("CPU does not support SSSE3") because Wine hides the CPU feature flags
   tests                   download every 3DMark test that works on Linux (STORAGE=1 adds the 30 GB storage test)
   shortcuts               add 3DMark / 3DMark 11 to the app menu with proper icons
   logs                    bundle diagnostics into ~/3dmark-helper-logs-*.tar.gz

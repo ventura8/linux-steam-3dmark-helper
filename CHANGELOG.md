@@ -3,6 +3,17 @@
 Format: [Keep a Changelog](https://keepachangelog.com/), versions: [SemVer](https://semver.org/).
 
 ## [Unreleased]
+### Added
+- PCMark 10 (524390) support; every owned app is installed and configured.
+- UL SystemInfo works under Proton (3DMark 11 starts and detects CPU/GPU): WoW64 COM mirroring, RpcSs auto-start, win64 typelib, launch wrapper that ends the leftover session.
+- `tests`: downloads every Linux-capable 3DMark test in one go (Steam `optionaldlc`).
+- `systeminfo fix|on|off`; automatic CD keys (X11: OCR + click; Wayland: one click); `lib/winereg.py`, `lib/cdkey.py`.
+- Detection of Steam's one-app-per-account prompt and of Remote Play starting instead of a local launch.
+### Changed
+- Proton Experimental is the default (Steel Nomad runs, Time Spy +10 %); Proton 10 fallback.
+- protontricks no longer used; d3dcompiler_47 installed directly (sha256-checked).
+- Prefixes are configured only after they ran on the final Proton; newer prefixes are moved aside, never deleted.
+- 3DMark 11 key path fixed (`Futuremark\3DMark11`).
 ### Fixed
 - Install Steam Linux Runtime 3.0 (sniper) with Proton 10; without it protontricks fails on fresh systems.
 - `doctor` aborted when an app had no launch options yet.

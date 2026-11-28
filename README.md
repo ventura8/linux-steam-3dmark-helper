@@ -19,99 +19,112 @@ One script that takes a fresh Ubuntu / Xubuntu / Kubuntu / Lubuntu (26.10; GNOME
 ```bash
 git clone https://github.com/ventura8/linux-steam-3dmark-helper
 cd linux-steam-3dmark-helper
-./3dmark-helper.sh            # = install: deps → Steam → login → apps → configure
+./3dmark-helper.sh            # = install: deps → Steam → login → apps → tests → configure
 ```
 
-What `install` does:
-1. Enables i386 and installs 32-bit Vulkan (`mesa-vulkan-drivers:i386`, `libnvidia-gl-<ver>:i386` on NVIDIA), `vulkan-tools`, `protontricks`. Without the 32-bit Vulkan driver the 3DMark launcher silently never starts.
-2. Installs Steam (`steam-installer`) if no deb/Snap/Flatpak Steam exists.
-3. Starts Steam and waits for you to log in.
-4. Installs Proton 10, 3DMark and 3DMark 11 through `steam://install/…` (confirm the dialogs).
-5. Closes Steam, pins **Proton 10** (fallback Experimental — never Proton 11, see below) and writes GPU-specific launch options.
-6. Creates the prefix and installs `d3dcompiler_43` + `d3dcompiler_47` (required for Time Spy).
-7. Adds **3DMark** and **3DMark 11** to the app menu with their real icons (taskbar shows the right icon too).
-8. Writes your CD key into the prefix registry (Steam on Linux doesn't, so 3DMark opens in demo mode). Find the key in Steam → right-click app → Manage → CD Keys.
+Supported apps: **3DMark** (223850), **3DMark 11** (205270), **PCMark 10** (524390) — whatever your Steam account owns.
 
-Then install the test DLCs: Library → 3DMark → Manage → DLC.
+What `install` does, with no questions asked:
+1. Installs dependencies (sudo): 32-bit Vulkan (`mesa-vulkan-drivers:i386`, `libnvidia-gl-<ver>:i386` on NVIDIA), OCR/X tools for automatic CD keys, and fixes amd64/i386 version skew in apt.
+2. Installs Steam if missing, opens it, waits for your login (on a monitor-less VNC box it first forces a display output on).
+3. Installs Steam Linux Runtime 3.0, **Proton Experimental**, Proton 10 and every owned app — no Steam dialogs.
+4. Downloads **every 3DMark test that works on Linux** in one go (Fire Strike, Time Spy, Port Royal, Steel Nomad, …).
+5. Pins Proton, writes per-GPU launch options and a small launch wrapper.
+6. Builds each prefix under that Proton, installs native `d3dcompiler_47` (no protontricks needed).
+7. Fetches and registers your **CD keys** (Steam on Linux never does → demo mode).
+8. Makes **UL SystemInfo** work under Proton (needed by 3DMark 11) — see below.
+9. Adds menu entries with the real icons; prints a `doctor` report.
 
 ## Commands
 | Command | Purpose |
 |---|---|
-| `doctor` | pass/fail report of the whole stack |
-| `deps`, `install-steam`, `login`, `install-apps` | individual install steps |
-| `setup <3dmark\|3dmark11>` | pin Proton + launch options (closes Steam) |
-| `prefix <app>` | create prefix + d3dcompiler verbs |
-| `key <app> [KEY]` | write CD key |
-| `launch-options <app>` | print what would be set for this GPU |
+| `doctor` | pass/fail report: Proton, prefix version, d3dcompiler, CD keys, EULAs, tests |
+| `deps`, `install-steam`, `login`, `install-apps`, `headless` | individual install steps |
+| `tests` | download all Linux-capable 3DMark tests (`STORAGE=1` adds the 30 GB storage test) |
+| `setup <app>` | pin Proton + launch options (closes Steam) |
+| `prefix <app>` | create/upgrade prefix, native d3dcompiler_47 |
+| `key <app> [KEY]` | fetch the CD key from Steam automatically and register it |
+| `systeminfo fix\|on\|off` | SystemInfo service fix (always) + scan on/off |
 | `shortcuts` | app-menu entries + icons |
-| `logs` | diagnostics tarball for bug reports |
+| `launch-options <app>`, `logs` | inspect / bug-report bundle |
 
-Env: `PROTON_TOOL=proton_experimental`, `OSMESA=1` (adds `--use-gl=osmesa` for a blank/white launcher), `SKIP_3DMARK11=1`, `ASSUME_YES=1` / `-y`.
+Apps: `3dmark`, `3dmark11`, `pcmark10`. Env: `PROTON_TOOL=proton_10`, `OSMESA=1`, `STORAGE=1`, `NO_WRAPPER=1`, `--ask` (confirm each step).
 
 ### Launch options written
-| GPU | Options |
+| GPU | Options (plus `APP_PROC=… <Steam>/3dmark-helper-launch.sh %command%`) |
 |---|---|
-| NVIDIA + iGPU (laptop) | `PROTON_ENABLE_NVAPI=1 DXVK_ENABLE_NVAPI=1 __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia __VK_LAYER_NV_optimus=NVIDIA_only VKD3D_CONFIG=dxr,dxr11 %command%` |
-| NVIDIA desktop | `PROTON_ENABLE_NVAPI=1 DXVK_ENABLE_NVAPI=1 VKD3D_CONFIG=dxr,dxr11 %command%` |
-| AMD / Intel | `VKD3D_CONFIG=dxr,dxr11 %command%` (`DRI_PRIME=1` on AMD+Intel hybrids) |
+| NVIDIA + iGPU (laptop) | `PROTON_ENABLE_NVAPI=1 DXVK_ENABLE_NVAPI=1 __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia __VK_LAYER_NV_optimus=NVIDIA_only VKD3D_CONFIG=dxr,dxr11` |
+| NVIDIA desktop | `PROTON_ENABLE_NVAPI=1 DXVK_ENABLE_NVAPI=1 VKD3D_CONFIG=dxr,dxr11` |
+| AMD / Intel | `VKD3D_CONFIG=dxr,dxr11` (`DRI_PRIME=1` on AMD+Intel hybrids) |
 
 AMD tip: if Time Spy hangs or shows artifacts on older Mesa, add `RADV_DEBUG=syncshaders` (costs ~20 %).
 
-## Test status (Proton 10 / Experimental, late 2025 – 2026)
-| Test | API | Status |
-|---|---|---|
-| Fire Strike / Extreme / Ultra | DX11 → DXVK | ✅ works |
-| Time Spy / Extreme | DX12 → vkd3d-proton | ⚠️ works for many with d3dcompiler_43/47; others report black screen → "An error occurred", or an SSSE3 "CPU not supported" gate. Vendor/version dependent |
-| Night Raid | DX12 | ✅ |
-| Port Royal | DXR | ✅ on RT-capable GPUs (Proton 10) |
-| Sky Diver, Cloud Gate, Ice Storm | DX11/DX10 | ✅ |
-| CPU Profile | — | ✅ |
-| Feature tests: DXR, mesh shader, VRS, PCIe, API overhead | | ✅ |
-| Sampler feedback | DX12U | ❓ untested on recent vkd3d |
-| Speed Way | DX12 Ultimate | ❌ fails to start |
-| Steel Nomad / Light (DX12 + Vulkan) | | ❌ |
-| Wild Life / Extreme | Vulkan | ❌ crash before loading |
-| Solar Bay | Vulkan RT | ❌ |
-| FSR / XeSS feature tests | | ❌ |
-| 3DMark 11 Basic / Performance / Extreme | DX11 | ❓ being verified by this project |
+## Results (measured by this project, Nov 2026)
+NUC — Xubuntu 26.10 (XFCE, X11), Intel Core Ultra 7 255H / **Intel Arc 140T**, Mesa 26.2:
 
-**Proton 11 regression (May 2026):** every DX12 test reports "You need a DirectX 12 compatible GPU" ([Proton#4034](https://github.com/ValveSoftware/Proton/issues/4034)). The helper therefore pins Proton 10.
-
-Per-machine results (filled as we test):
-| Machine | GPU | Distro | Result |
+| Test | API | Proton 10 | Proton Experimental (11) |
 |---|---|---|---|
-| Laptop | RTX 3080 Mobile + Intel UHD | Ubuntu 26.10, Snap Steam | in progress |
-| NUC | Intel Arc 140T | Xubuntu 26.10 | in progress |
-| Desktop | NVIDIA | Xubuntu 26.10 | pending |
-| Desktop | AMD | Xubuntu 26.10 | pending |
-| any | any | Kubuntu 26.10 (KDE Plasma) | pending |
-| any | any | Lubuntu 26.10 (LXQt) | pending |
+| 3DMark CPU Profile | — | ✅ 5858 (max threads) | |
+| 3DMark Fire Strike | DX11 | ✅ 5664 | |
+| 3DMark Time Spy | DX12 | ✅ 1933 | ✅ **2138** |
+| 3DMark Night Raid | DX12 | ✅ 12459 | |
+| 3DMark Port Royal | DXR | ✅ 787 | |
+| 3DMark Steel Nomad | DX12 | ❌ crash at start (vkd3d-proton 3.0) | ✅ **541** |
+| 3DMark 11 Performance | DX11 | | ✅ **P7820** (SystemInfo detects CPU/GPU) |
+| PCMark 10 | mixed | | testing |
 
-Report yours: run `./3dmark-helper.sh logs` and open an issue.
+Laptop — Ubuntu 26.10 (GNOME, Wayland), RTX 3080 Mobile + Intel UHD, Snap Steam: testing.
+
+Why Experimental is the default: in the current build (`experimental-11.0-20261123b`) the May 2026 "You need a DirectX 12 compatible GPU" regression ([Proton#4034](https://github.com/ValveSoftware/Proton/issues/4034)) is gone, Time Spy scores ~10 % higher and Steel Nomad runs. `PROTON_TOOL=proton_10` switches back.
+
+Report yours: `./3dmark-helper.sh logs` and open an issue.
+
+## UL SystemInfo under Proton (solved)
+UL's hardware detector never worked under Wine/Proton — 3DMark 11 refuses to start ("SystemInfo initialization failed"), 3DMark shows "System information not available". Root causes found here:
+1. SystemInfo's COM classes are registered only in the 32-bit registry view (`Wow6432Node`); 64-bit apps get "class not registered".
+2. Its service (FMSISvc) starts Wine's RPC service from inside its own start-up; Wine's service manager can't do that nested start, so FMSISvc dies.
+3. The type library used to marshal calls between the 32-bit service and 64-bit apps has only a `win32` entry.
+4. Its scanner keeps running after the app exits, so Steam keeps showing the app as running.
+
+The helper mirrors the classes to the 64-bit view, sets RpcSs to auto-start, adds the `win64` typelib entry, and its launch wrapper ends the leftover session. Result: 3DMark 11 runs and uploads results; 3DMark shows the GPU and CPU.
+
+One catch: with the **scan** enabled, 3DMark wrongly blocks Time Spy and Night Raid with "Your CPU does not support SSSE3" (Wine hides the CPU feature flags from SystemInfo). So `install` keeps 3DMark/PCMark's scan **off** (`systeminfo on` to enable). Results are not validated online either way.
+
+## Desktop support (GNOME, XFCE, KDE Plasma, LXQt)
+| | GNOME (Ubuntu) | XFCE (Xubuntu) | KDE Plasma (Kubuntu) | LXQt (Lubuntu) |
+|---|---|---|---|---|
+| Session | Wayland | X11 | Wayland (default) or X11 | X11 |
+| CD key | 1 click (Wayland blocks synthetic input) | automatic (OCR + click) | Wayland: 1 click · X11: automatic | automatic |
+| Menu entry + taskbar icon | ✅ `StartupWMClass=steam_app_<id>` | ✅ | ✅ (+ `kbuildsycoca6` refresh) | ✅ |
+| Clipboard | wl-paste | xclip/xsel | wl-paste / Klipper | xclip/xsel |
+| 3DMark title bar | none (app draws its own frame) | ✅ drawn by xfwm4 | KWin: Alt+F3 menu | Openbox: Alt+Space menu |
+| Status | ✅ laptop | ✅ NUC | needs testers | needs testers |
+
+Everything the helper does is desktop-neutral (XDG `.desktop`, hicolor icons, X11/XWayland window capture); the differences above are only in how the CD-key dialog is clicked and how windows are managed.
 
 ## What still needs you
-Everything is automatic except what only you can do: your **sudo password**, **Steam login**, accepting the **3DMark EULA**, and installing the individual tests from 3DMark's **Benchmarks** tab (Time Spy, Fire Strike, … are fetched in-app).
+Your **sudo password**, your **Steam login**, accepting each app's **EULA** in Steam, and — on Wayland only — one click on your CD key when Steam shows it.
 
 ## Troubleshooting
-- **No title-bar buttons** → 3DMark draws its own borderless window (same on Windows). Use the keyboard or the taskbar entry:
+- **No title-bar buttons (GNOME)** → 3DMark draws its own borderless window. Use the keyboard or the taskbar entry:
 
   | Desktop | Minimise | Maximise | Close | Move |
   |---|---|---|---|---|
   | GNOME (Ubuntu) | Super+H | Super+↑ | Alt+F4 | Super+drag |
-  | XFCE (Xubuntu) | click taskbar entry | Alt+F10 | Alt+F4 | Alt+drag |
+  | XFCE (Xubuntu) | title bar / taskbar | Alt+F10 | Alt+F4 | Alt+drag |
   | KDE Plasma (Kubuntu) | Meta+PgDn | Meta+PgUp | Alt+F4 | Meta+drag |
-  | LXQt (Lubuntu, Openbox) | click taskbar entry / Alt+Space menu | Alt+Space → Maximize | Alt+F4 | Alt+drag |
-- **Steam starts but no window appears (headless / VNC box)** → X has no connected monitor, so Steam's UI can't create windows ("Failed to create popup" in `logs/webhelper_js.txt`). `./3dmark-helper.sh headless` forces the HDMI connector on (sudo). Permanent: HDMI dummy plug or kernel arg `video=HDMI-A-1:1920x1080@60e`.
-- **Steam started over SSH shows no window** → the helper borrows your desktop session's environment automatically; start it via the helper or from the desktop.
-- **"System information not available"** → Futuremark SystemInfo can't read hardware under Proton; benchmarks still run.
-- **Apt "Unable to satisfy dependencies … :i386 Breaks"** → handled automatically by `deps` (aligns amd64/i386 versions of the same source package).
+  | LXQt (Lubuntu, Openbox) | Alt+Space menu | Alt+Space → Maximize | Alt+F4 | Alt+drag |
+- **"Your CPU does not support SSSE3" on Time Spy / Night Raid** → SystemInfo scan is on: `./3dmark-helper.sh systeminfo off`.
+- **3DMark 11: "SystemInfo initialization failed"** → `./3dmark-helper.sh systeminfo fix`.
+- **App still "running" in Steam after closing / next launch says another session is running** → old launch options without the wrapper: `./3dmark-helper.sh setup <app>`. Steam allows one running app per account across all your PCs.
+- **Steel Nomad "No result produced"** → you are on Proton 10: `./3dmark-helper.sh setup 3dmark` (Experimental).
+- **Steam starts but no window (headless / VNC)** → `./3dmark-helper.sh headless`; permanent: HDMI dummy plug or kernel arg `video=HDMI-A-1:1920x1080@60e`.
+- **Demo mode** → `./3dmark-helper.sh key 3dmark`.
+- **CPU Profile / Time Spy "D3DCompile2 … not yet implemented"** → native d3dcompiler missing: `./3dmark-helper.sh prefix 3dmark`.
 - **Launcher never opens, no log** → 32-bit Vulkan missing: `./3dmark-helper.sh deps`.
-- **Demo mode / only Basic Edition** → `./3dmark-helper.sh key 3dmark`.
+- **Apt "… :i386 Breaks …"** → handled by `deps` (aligns amd64/i386 versions).
 - **Blank white launcher** → `OSMESA=1 ./3dmark-helper.sh setup 3dmark`.
-- **"DirectX 12 compatible GPU" error** → you are on Proton 11: `./3dmark-helper.sh setup 3dmark`.
-- **Tests greyed out / missing** → install the DLCs in Steam.
-- **Wrong GPU used on laptop** → check `doctor`; on NVIDIA hybrids the PRIME vars are set automatically.
-- Logs: add `PROTON_LOG=1` to launch options → `~/steam-223850.log`.
+- Logs: `PROTON_LOG=1` in launch options → `~/steam-<appid>.log`; `./3dmark-helper.sh logs` bundles everything.
 
 ## Competition / prior art
 | Project | What it does | Gap |
